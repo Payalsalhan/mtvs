@@ -1,0 +1,9 @@
+﻿flask
+flask-login
+flask-sqlalchemy
+authlib
+requests
+reportlab
+python-dotenv
+cryptography
+gunicorn
