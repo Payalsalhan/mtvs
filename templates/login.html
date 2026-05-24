@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTVS — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #f5f4f0;
+    --surface:   #ffffff;
+    --border:    #e4e2dc;
+    --border-strong: #ccc9bf;
+    --ink:       #1a1916;
+    --ink-2:     #4a4840;
+    --ink-3:     #8a8680;
+    --accent:    #1a6b3a;
+    --accent-lt: #e8f4ec;
+    --danger:    #b83232;
+    --danger-lt: #fdf0f0;
+    --radius:    8px;
+    --shadow-md: 0 4px 24px rgba(0,0,0,.09);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* LEFT PANEL */
+  .left-panel {
+    background: var(--accent);
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+  .left-panel::before {
+    content: '';
+    position: absolute;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.06);
+    top: -100px; right: -100px;
+  }
+  .left-panel::after {
+    content: '';
+    position: absolute;
+    width: 280px; height: 280px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.04);
+    bottom: 60px; left: -60px;
+  }
+
+  .brand { position: relative; z-index: 1; }
+  .brand-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 22px; font-weight: 500;
+    color: #fff; letter-spacing: .06em;
+    margin-bottom: 6px;
+  }
+  .brand-sub { font-size: 13px; color: rgba(255,255,255,.65); }
+
+  .left-content { position: relative; z-index: 1; }
+  .left-headline {
+    font-size: 32px; font-weight: 600; line-height: 1.25;
+    color: #fff; margin-bottom: 16px;
+  }
+  .left-body { font-size: 14px; color: rgba(255,255,255,.72); line-height: 1.7; margin-bottom: 28px; }
+
+  .feature-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .feature-list li {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13px; color: rgba(255,255,255,.8);
+  }
+  .feature-list li::before {
+    content: '✓';
+    background: rgba(255,255,255,.15);
+    color: #fff; width: 20px; height: 20px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+  }
+
+  .left-footer { position: relative; z-index: 1; font-size: 11px; color: rgba(255,255,255,.45); }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 48px;
+    background: var(--surface);
+  }
+
+  .auth-box { width: 100%; max-width: 360px; }
+
+  .auth-title { font-size: 22px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .auth-sub   { font-size: 13px; color: var(--ink-3); margin-bottom: 32px; line-height: 1.6; }
+
+  /* Flash */
+  .flash {
+    padding: 10px 13px; border-radius: var(--radius);
+    font-size: 13px; margin-bottom: 20px; display: none;
+  }
+  .flash.error   { background: var(--danger-lt); color: var(--danger); border: 1px solid #f0c0c0; display: block; }
+  .flash.success { background: var(--accent-lt); color: var(--accent); border: 1px solid #b8d9c3; display: block; }
+
+  /* Google button */
+  .btn-google {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    width: 100%; padding: 13px 20px;
+    background: #fff; color: #3c4043;
+    border: 1.5px solid #dadce0; border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
+    cursor: pointer; text-decoration: none;
+    transition: background .15s, box-shadow .15s, border-color .15s;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  .btn-google:hover {
+    background: #f8f9fa;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    border-color: #c5c7ca;
+  }
+  .btn-google:active { background: #f1f3f4; }
+
+  .google-icon {
+    width: 20px; height: 20px; flex-shrink: 0;
+  }
+
+  .divider {
+    display: flex; align-items: center; gap: 10px;
+    margin: 24px 0; font-size: 12px; color: var(--ink-3);
+  }
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  .security-note {
+    margin-top: 28px; padding: 12px 14px;
+    background: var(--accent-lt); border: 1px solid #b8d9c3;
+    border-radius: var(--radius); font-size: 12px; color: var(--accent);
+    line-height: 1.6;
+  }
+  .security-note strong { display: block; margin-bottom: 3px; }
+
+  .terms-note {
+    margin-top: 16px; font-size: 11px; color: var(--ink-3);
+    text-align: center; line-height: 1.6;
+  }
+  .terms-note a { color: var(--accent); text-decoration: none; }
+
+  @media(max-width: 700px) {
+    body { grid-template-columns: 1fr; }
+    .left-panel { display: none; }
+    .right-panel { padding: 32px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LEFT PANEL -->
+<div class="left-panel">
+  <div class="brand">
+    <div class="brand-name">MTVS</div>
+    <div class="brand-sub">Web Vulnerability Scanner · v3.0</div>
+  </div>
+
+  <div class="left-content">
+    <div class="left-headline">Secure your website<br>before attackers do.</div>
+    <div class="left-body">
+      MTVS scans your site for vulnerabilities, misconfigurations, and known CVEs — and gives you plain-English fixes.
+    </div>
+    <ul class="feature-list">
+      <li>HTTP headers, CORS & HTTPS checks</li>
+      <li>CMS detection (WordPress, Drupal, Joomla)</li>
+      <li>Sensitive path exposure (.git, .env)</li>
+      <li>AI-powered analysis & remediation</li>
+      <li>PDF report download — free</li>
+      <li>Encrypted data storage</li>
+    </ul>
+  </div>
+
+  <div class="left-footer">Only scan systems you own or have written permission to test.</div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="right-panel">
+  <div class="auth-box">
+
+    <div class="auth-title">Welcome to MTVS</div>
+    <div class="auth-sub">Sign in with your Google account to access<br>your secure scanner dashboard.</div>
+
+    <!-- Flash messages from Flask -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <!-- Google Sign In Button -->
+    <a href="{{ url_for('auth.google_login') }}" class="btn-google">
+      <!-- Google SVG logo -->
+      <svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Continue with Google
+    </a>
+
+    <div class="divider">or</div>
+
+    <div style="text-align:center;color:var(--ink-3);font-size:13px;padding:8px 0;">
+      Only Gmail / Google accounts are supported.<br>
+      No password required — Google handles it securely.
+    </div>
+
+    <div class="security-note">
+      <strong>🔒 Your data is encrypted</strong>
+      All personal information stored in our database is encrypted. We only store your Google ID, name, and email — nothing else.
+    </div>
+
+    <div class="terms-note">
+      By signing in you agree to our <a href="/terms">Terms of Service</a> and confirm
+      you will only scan systems you own or have written permission to test.
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

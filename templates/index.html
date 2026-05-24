@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTVS — Web Vulnerability Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ─── DESIGN TOKENS ─────────────────────────────────────────── */
+  :root {
+    --bg:        #f5f4f0;
+    --surface:   #ffffff;
+    --surface2:  #f9f8f5;
+    --border:    #e4e2dc;
+    --border-strong: #ccc9bf;
+
+    --ink:       #1a1916;
+    --ink-2:     #4a4840;
+    --ink-3:     #8a8680;
+
+    --accent:    #1a6b3a;       /* deep green — primary action */
+    --accent-lt: #e8f4ec;
+    --accent-mid:#2e9455;
+
+    --danger:    #b83232;
+    --danger-lt: #fdf0f0;
+    --warn:      #a06000;
+    --warn-lt:   #fdf6e8;
+    --ok:        #1a6b3a;
+    --ok-lt:     #e8f4ec;
+    --info:      #1a4a8a;
+    --info-lt:   #eef3fb;
+
+    --radius:    6px;
+    --shadow:    0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+    --shadow-md: 0 4px 16px rgba(0,0,0,.08);
+  }
+
+  /* ─── RESET ──────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ─── LAYOUT ─────────────────────────────────────────────────── */
+  .app-wrap   { max-width: 1100px; margin: 0 auto; padding: 0 20px 60px; }
+
+  /* ─── HEADER ─────────────────────────────────────────────────── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+    padding: 22px 0 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 28px;
+  }
+  .logo { display: flex; align-items: baseline; gap: 10px; }
+  .logo-name {
+    font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500;
+    letter-spacing: .04em; color: var(--ink);
+  }
+  .logo-name span { color: var(--accent); }
+  .logo-sub { font-size: 11px; color: var(--ink-3); letter-spacing: .03em; }
+
+  .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* ─── BUTTONS ────────────────────────────────────────────────── */
+  .btn {
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+    padding: 8px 14px; border-radius: var(--radius);
+    border: 1px solid transparent; cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+    white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn-primary {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .btn-primary:hover { background: #155c30; border-color: #155c30; }
+  .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+
+  .btn-outline {
+    background: var(--surface); color: var(--ink-2); border-color: var(--border-strong);
+  }
+  .btn-outline:hover { border-color: var(--ink-3); color: var(--ink); }
+
+  .btn-ghost {
+    background: transparent; color: var(--ink-3); border-color: transparent;
+  }
+  .btn-ghost:hover { background: var(--surface); color: var(--ink); }
+
+  .btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .btn-danger:hover { background: #9a2a2a; }
+
+  .btn-sm { font-size: 12px; padding: 5px 10px; }
+
+  /* Plan badge */
+  .plan-chip {
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    padding: 4px 10px; border-radius: 20px;
+    border: 1px solid var(--border-strong); background: var(--surface);
+    color: var(--ink-2); cursor: pointer;
+  }
+  .plan-chip.medium { border-color: var(--warn); color: var(--warn); background: var(--warn-lt); }
+  .plan-chip.pro    { border-color: var(--accent); color: var(--accent); background: var(--accent-lt); }
+
+  /* ─── STATUS BAR ─────────────────────────────────────────────── */
+  .status-bar {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 10px 14px; border-radius: var(--radius);
+    background: var(--surface); border: 1px solid var(--border);
+    margin-bottom: 20px; font-size: 12px; color: var(--ink-3);
+  }
+  .status-bar .s-item { display: flex; align-items: center; gap: 5px; }
+  .s-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .s-dot.warn { background: var(--warn); }
+  .free-tag {
+    font-size: 10px; font-weight: 600; letter-spacing: .05em;
+    color: var(--accent); background: var(--accent-lt);
+    padding: 1px 6px; border-radius: 3px;
+  }
+
+  /* ─── TABS ───────────────────────────────────────────────────── */
+  .tabs {
+    display: flex; gap: 2px; margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    font-size: 13px; font-weight: 500; padding: 9px 16px;
+    border: none; background: transparent; color: var(--ink-3);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    margin-bottom: -1px; transition: color .15s, border-color .15s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--ink); }
+  .tab-badge {
+    display: inline-block; background: var(--danger); color: #fff;
+    font-size: 10px; min-width: 16px; text-align: center;
+    border-radius: 8px; padding: 0 4px; margin-left: 4px;
+  }
+
+  /* ─── SCAN INPUT ─────────────────────────────────────────────── */
+  .scan-input-wrap {
+    display: flex; gap: 10px; margin-bottom: 16px;
+  }
+  .scan-input {
+    flex: 1; padding: 11px 14px;
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius);
+    background: var(--surface); color: var(--ink); outline: none;
+    transition: border-color .15s;
+  }
+  .scan-input:focus { border-color: var(--accent); }
+  .scan-input::placeholder { color: var(--ink-3); }
+
+  /* ─── QUICK SELECT ───────────────────────────────────────────── */
+  .quick-bar {
+    display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+    padding: 10px 14px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 20px;
+  }
+  .quick-label { font-size: 11px; color: var(--ink-3); margin-right: 4px; }
+
+  /* ─── CATEGORIES GRID ────────────────────────────────────────── */
+  .categories {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 12px; margin-bottom: 22px;
+  }
+  .cat-block {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+    position: relative; transition: border-color .15s;
+  }
+  .cat-block:hover { border-color: var(--border-strong); }
+  .cat-block.locked { opacity: .55; }
+  .cat-lock-overlay {
+    display: none; position: absolute; inset: 0; background: rgba(245,244,240,.8);
+    border-radius: var(--radius); align-items: center; justify-content: center;
+    font-size: 12px; color: var(--ink-3); cursor: pointer; z-index: 2; gap: 6px;
+  }
+  .cat-block.locked .cat-lock-overlay { display: flex; }
+
+  .cat-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .cat-icon { font-size: 15px; }
+  .cat-title { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+  .cat-badge {
+    margin-left: auto; font-size: 10px; padding: 2px 7px;
+    border-radius: 3px; font-weight: 500; letter-spacing: .03em;
+  }
+  .badge-py   { background: var(--info-lt);   color: var(--info); }
+  .badge-nmap { background: var(--warn-lt);   color: var(--warn); }
+  .badge-pro  { background: var(--accent-lt); color: var(--accent); }
+
+  /* Tool checkboxes */
+  .tool-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 0; cursor: pointer; user-select: none;
+  }
+  .tool-item input[type=checkbox] { display: none; }
+  .custom-cb {
+    width: 14px; height: 14px; border: 1.5px solid var(--border-strong);
+    border-radius: 3px; flex-shrink: 0; position: relative;
+    transition: background .12s, border-color .12s;
+  }
+  .tool-item input:checked ~ .custom-cb {
+    background: var(--accent); border-color: var(--accent);
+  }
+  .tool-item input:checked ~ .custom-cb::after {
+    content: ''; position: absolute; top: 2px; left: 4px;
+    width: 3px; height: 6px; border: 2px solid #fff;
+    border-top: none; border-left: none; transform: rotate(45deg);
+  }
+  .tool-label { font-size: 13px; color: var(--ink-2); }
+  .tool-item:hover .tool-label { color: var(--ink); }
+  .tool-slow { font-size: 10px; color: var(--danger); margin-left: auto; }
+
+  /* ─── SCAN ROW ───────────────────────────────────────────────── */
+  .scan-row {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .sel-count { font-size: 12px; color: var(--ink-3); }
+
+  /* ─── PROGRESS ───────────────────────────────────────────────── */
+  #progress-wrap { display: none; margin-bottom: 16px; }
+  #progress-label { font-size: 12px; color: var(--ink-3); margin-bottom: 6px; }
+  .progress-track { height: 4px; background: var(--border); border-radius: 2px; }
+  #progress-bar { height: 4px; background: var(--accent); width: 0%; border-radius: 2px; transition: width .3s; }
+
+  /* ─── EXPORT BAR ─────────────────────────────────────────────── */
+  #export-bar {
+    display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 12px 16px; background: var(--accent-lt);
+    border: 1px solid #b8d9c3; border-radius: var(--radius);
+    margin-bottom: 20px;
+  }
+  .export-label { font-size: 12px; color: var(--accent); font-weight: 500; }
+
+  /* ─── SUMMARY CARDS ──────────────────────────────────────────── */
+  .scan-summary {
+    display: none; grid-template-columns: repeat(4,1fr);
+    gap: 10px; margin-bottom: 20px;
+  }
+  .scan-summary.visible { display: grid; }
+  .sum-card {
+    padding: 14px 16px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--surface); text-align: center;
+  }
+  .sum-num { font-size: 28px; font-weight: 600; line-height: 1.1; margin-bottom: 3px; }
+  .sum-label { font-size: 11px; color: var(--ink-3); }
+  .sum-card.crit .sum-num { color: var(--danger); }
+  .sum-card.warn .sum-num { color: var(--warn); }
+  .sum-card.ok   .sum-num { color: var(--ok); }
+  .sum-card.info .sum-num { color: var(--ink-3); }
+
+  /* ─── THREAT METER ───────────────────────────────────────────── */
+  .threat-meter {
+    display: none; padding: 14px 16px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--surface); margin-bottom: 20px;
+  }
+  .threat-meter.visible { display: block; }
+  .tm-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); margin-bottom: 8px; }
+  .tm-bar-bg { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .tm-bar { height: 6px; border-radius: 3px; transition: width .8s ease; }
+  .tm-text { font-size: 13px; font-weight: 600; margin-top: 7px; }
+
+  /* ─── RESULT BLOCKS ──────────────────────────────────────────── */
+  #output { display: flex; flex-direction: column; gap: 8px; }
+
+  .result-block {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    animation: fadeUp .25s ease;
+  }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:none } }
+
+  .result-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 14px; cursor: pointer; user-select: none;
+    transition: background .12s;
+  }
+  .result-header:hover { background: var(--surface2); }
+
+  .result-tool {
+    font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500;
+    color: var(--ink); white-space: nowrap;
+  }
+  .result-desc { font-size: 12px; color: var(--ink-3); }
+  .result-meta { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+  .caret { font-size: 11px; color: var(--ink-3); }
+
+  /* Threat badge */
+  .threat-badge {
+    font-size: 10px; font-weight: 600; letter-spacing: .05em;
+    padding: 2px 8px; border-radius: 3px;
+  }
+  .threat-CRITICAL { background: var(--danger-lt); color: var(--danger); }
+  .threat-HIGH     { background: #fdf3ef;           color: #b05000; }
+  .threat-MEDIUM   { background: var(--warn-lt);    color: var(--warn); }
+  .threat-LOW      { background: var(--ok-lt);      color: var(--ok); }
+  .threat-INFO     { background: var(--info-lt);    color: var(--info); }
+
+  /* Status badge */
+  .status-badge {
+    font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 3px;
+  }
+  .status-completed { background: var(--ok-lt);   color: var(--ok); }
+  .status-error     { background: var(--danger-lt);color: var(--danger); }
+  .status-timeout   { background: var(--warn-lt);  color: var(--warn); }
+  .status-running   { background: var(--info-lt);  color: var(--info); }
+
+  /* Collapsed content */
+  .result-content { display: block; border-top: 1px solid var(--border); }
+  .result-content.collapsed { display: none; }
+
+  /* Threat intel panel */
+  .threat-intel-panel {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    border-bottom: 1px solid var(--border);
+  }
+  .ti-section { padding: 12px 14px; border-right: 1px solid var(--border); }
+  .ti-section:last-child { border-right: none; }
+  .ti-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 5px; display: flex; align-items: center; gap: 4px;
+  }
+  .ti-what .ti-label { color: var(--info); }
+  .ti-why  .ti-label { color: var(--danger); }
+  .ti-fix  .ti-label { color: var(--accent); }
+  .ti-text { font-size: 12px; color: var(--ink-2); line-height: 1.6; }
+  .ti-cve  { font-size: 11px; color: var(--ink-3); margin-top: 5px; font-family: 'DM Mono', monospace; }
+
+  .result-body {
+    padding: 12px 14px; font-family: 'DM Mono', monospace;
+    font-size: 12px; line-height: 1.7; color: var(--ink-2);
+    white-space: pre-wrap; word-break: break-all;
+    max-height: 340px; overflow-y: auto; background: var(--surface2);
+  }
+  .result-body::-webkit-scrollbar { width: 4px; }
+  .result-body::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+  /* output highlights */
+  .hl-vuln  { color: var(--danger); font-weight: 600; }
+  .hl-ok    { color: var(--ok); }
+  .hl-warn  { color: var(--warn); }
+  .hl-info  { color: var(--info); }
+  .hl-found { color: #a05000; }
+
+  /* ─── HISTORY ─────────────────────────────────────────────────── */
+  #history-panel { display: none; }
+  .history-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .history-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+
+  .history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .history-table th {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--ink-3); padding: 9px 12px; border-bottom: 1px solid var(--border);
+    text-align: left; background: var(--surface);
+  }
+  .history-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--ink-2); vertical-align: middle; }
+  .history-table tr:hover td { background: var(--surface2); }
+  .h-empty { text-align: center; color: var(--ink-3); padding: 40px; }
+  .h-vuln-ct { color: var(--danger); font-weight: 600; }
+  .h-warn-ct { color: var(--warn); }
+  .h-ok-ct   { color: var(--ok); }
+  .h-btn-row { display: flex; gap: 6px; }
+
+  /* ─── MODALS ─────────────────────────────────────────────────── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(26,25,22,.45); z-index: 200;
+    backdrop-filter: blur(3px); align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; width: 94%; max-width: 680px;
+    max-height: 90vh; overflow-y: auto; padding: 28px 28px 24px;
+    position: relative; box-shadow: var(--shadow-md);
+    animation: fadeUp .2s ease;
+  }
+  .modal-box.wide { max-width: 1000px; }
+  .modal-title { font-size: 17px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .modal-sub { font-size: 12px; color: var(--ink-3); margin-bottom: 20px; }
+  .modal-close {
+    position: absolute; top: 16px; right: 16px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--ink-3); cursor: pointer; border-radius: 4px;
+    font-size: 12px; padding: 4px 9px; transition: all .12s;
+  }
+  .modal-close:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ─── PLANS ──────────────────────────────────────────────────── */
+  .plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 10px; margin-bottom: 20px; }
+  .plan-card {
+    border: 1.5px solid var(--border); border-radius: var(--radius);
+    padding: 16px 14px; cursor: pointer; transition: all .15s; position: relative;
+  }
+  .plan-card:hover { border-color: var(--accent); }
+  .plan-card.selected { border-color: var(--accent); background: var(--accent-lt); }
+  .plan-card-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; color: var(--ink-3); }
+  .plan-price { font-size: 26px; font-weight: 700; margin-bottom: 5px; color: var(--ink); line-height: 1; }
+  .plan-price span { font-size: 13px; font-weight: 400; color: var(--ink-3); }
+  .plan-desc { font-size: 11px; color: var(--ink-3); margin-bottom: 10px; line-height: 1.5; }
+  .plan-features { list-style: none; }
+  .plan-features li { font-size: 11px; color: var(--ink-2); padding: 2px 0; display: flex; gap: 5px; }
+  .plan-features li::before { content: '✓'; color: var(--accent); flex-shrink: 0; }
+  .plan-features li.no::before { content: '✕'; color: var(--ink-3); }
+  .free-badge {
+    position: absolute; top: -1px; right: 10px;
+    background: var(--accent); color: #fff;
+    font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 0 0 4px 4px;
+    letter-spacing: .06em;
+  }
+  .modal-actions {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    border-top: 1px solid var(--border); padding-top: 16px;
+  }
+  .pay-note { font-size: 11px; color: var(--ink-3); }
+
+  /* ─── CHAT PANEL ─────────────────────────────────────────────── */
+  #chat-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(26,25,22,.3); z-index: 99;
+  }
+  #chat-panel {
+    position: fixed; right: 0; top: 0; width: 400px; max-width: 100vw; height: 100vh;
+    background: var(--surface); border-left: 1px solid var(--border);
+    z-index: 100; display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .28s ease;
+    box-shadow: -4px 0 20px rgba(0,0,0,.08);
+  }
+  #chat-panel.open { transform: translateX(0); }
+
+  .chat-header {
+    padding: 16px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .chat-title { font-size: 14px; font-weight: 600; color: var(--ink); flex: 1; }
+  .chat-sub { font-size: 11px; color: var(--ink-3); }
+  .chat-free { font-size: 10px; font-weight: 600; color: var(--accent); background: var(--accent-lt); padding: 2px 7px; border-radius: 3px; }
+
+  #chat-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  #chat-messages::-webkit-scrollbar { width: 4px; }
+  #chat-messages::-webkit-scrollbar-thumb { background: var(--border-strong); }
+
+  .msg { max-width: 90%; padding: 10px 13px; border-radius: var(--radius); font-size: 13px; line-height: 1.6; animation: fadeUp .2s ease; }
+  .msg-user { align-self: flex-end; background: var(--accent); color: #fff; }
+  .msg-ai { align-self: flex-start; background: var(--surface2); border: 1px solid var(--border); color: var(--ink-2); }
+  .msg-sender { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .msg-user .msg-sender { color: rgba(255,255,255,.7); }
+  .msg-ai .msg-sender   { color: var(--ink-3); }
+  .msg-typing { align-self: flex-start; background: var(--surface2); border: 1px solid var(--border); color: var(--ink-3); font-size: 12px; padding: 9px 12px; border-radius: var(--radius); }
+
+  .quick-prompts { padding: 8px 14px; display: flex; gap: 5px; flex-wrap: wrap; border-top: 1px solid var(--border); }
+  .qp-btn {
+    font-size: 11px; padding: 4px 9px; border-radius: 3px;
+    border: 1px solid var(--border); color: var(--ink-3);
+    background: var(--surface); cursor: pointer; transition: all .12s;
+  }
+  .qp-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .context-toggle { display: flex; align-items: center; gap: 7px; padding: 7px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--ink-3); }
+  .context-toggle input { accent-color: var(--accent); }
+
+  .chat-input-row { display: flex; border-top: 1px solid var(--border); }
+  #chat-input {
+    flex: 1; background: var(--surface); border: none; color: var(--ink);
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    padding: 13px 15px; outline: none; resize: none;
+    min-height: 48px; max-height: 100px;
+  }
+  #chat-input::placeholder { color: var(--ink-3); }
+  #chat-send {
+    font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 12px;
+    padding: 13px 16px; border: none; border-left: 1px solid var(--border);
+    background: var(--surface2); color: var(--accent); cursor: pointer;
+    transition: background .12s;
+  }
+  #chat-send:hover { background: var(--accent-lt); }
+  #chat-send:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ─── HISTORY DETAIL MODAL ───────────────────────────────────── */
+  #histDetailModal .modal-box { max-width: 1000px; }
+
+  /* ─── RESPONSIVE ─────────────────────────────────────────────── */
+  @media(max-width:700px) {
+    .threat-intel-panel { grid-template-columns: 1fr; }
+    .ti-section { border-right: none; border-bottom: 1px solid var(--border); }
+    .scan-summary.visible { grid-template-columns: 1fr 1fr; }
+    .categories { grid-template-columns: 1fr; }
+    #chat-panel { width: 100vw; }
+    .header-actions { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app-wrap">
+
+<!-- ══ HEADER ══ -->
+<div class="header">
+  <div class="logo">
+    <div>
+      <div class="logo-name">MT<span>VS</span></div>
+      <div class="logo-sub">Web Vulnerability Scanner · v3.0</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span class="plan-chip" id="planBadge" onclick="openPricingModal()">Free Plan</span>
+    <button class="btn btn-outline" onclick="openPricingModal()">⚡ Upgrade</button>
+    <button class="btn btn-outline" id="chatToggleBtn" onclick="toggleChat()">🤖 AI Assistant <span class="free-tag">FREE</span></button>
+    <button class="btn btn-outline" onclick="showTab('history');loadHistory()">📋 History</button>
+  </div>
+</div>
+
+<!-- ══ STATUS BAR ══ -->
+<div class="status-bar">
+  <span style="font-size:11px;font-weight:600;color:var(--ink-2)">Current plan:</span>
+  <span class="s-item"><span class="s-dot"></span> Python scans included</span>
+  <span class="s-item"><span class="s-dot"></span> PDF download <span class="free-tag">FREE</span></span>
+  <span class="s-item"><span class="s-dot"></span> AI Chatbot <span class="free-tag">FREE</span></span>
+  <span class="s-item"><span class="s-dot warn"></span> Nmap scans — upgrade required</span>
+  <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openPricingModal()">Unlock Nmap →</button>
+</div>
+
+<!-- ══ TABS ══ -->
+<div class="tabs">
+  <button class="tab active" id="tab-scanner" onclick="showTab('scanner')">Scanner</button>
+  <button class="tab" id="tab-history" onclick="showTab('history');loadHistory()">Scan History</button>
+</div>
+
+<!-- ══════════════ SCANNER TAB ══════════════ -->
+<div id="scanner-panel">
+
+  <!-- Input -->
+  <div class="scan-input-wrap">
+    <input class="scan-input" id="target" type="text" placeholder="target.com  or  192.168.1.1" autocomplete="off" spellcheck="false">
+    <button class="btn btn-primary" id="scanBtn" onclick="startScan()">Run Scan</button>
+  </div>
+
+  <!-- Quick select -->
+  <div class="quick-bar">
+    <span class="quick-label">Quick select:</span>
+    <button class="btn btn-outline btn-sm" onclick="selectAll()">All</button>
+    <button class="btn btn-outline btn-sm" onclick="clearAll()">Clear</button>
+    <button class="btn btn-outline btn-sm" onclick="selectPython()">Python only</button>
+    <button class="btn btn-outline btn-sm" onclick="selectNmap()">Nmap only</button>
+    <button class="btn btn-outline btn-sm" onclick="selectSafe()">Safe (no DoS)</button>
+  </div>
+
+  <!-- Tool categories -->
+  <div class="categories" id="categories">
+
+    <div class="cat-block" id="cat-web">
+      <div class="cat-header">
+        <span class="cat-icon">🌐</span>
+        <span class="cat-title">Web Checks</span>
+        <span class="cat-badge badge-py">Python</span>
+      </div>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="http_headers" checked><span class="custom-cb"></span><span class="tool-label">HTTP security headers</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="https_redirect" checked><span class="custom-cb"></span><span class="tool-label">HTTPS redirect</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="cors" checked><span class="custom-cb"></span><span class="tool-label">CORS policy</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="robots" checked><span class="custom-cb"></span><span class="tool-label">robots.txt / sitemap.xml</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="open_dirs" checked><span class="custom-cb"></span><span class="tool-label">Sensitive paths (.git, .env…)</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="ipv6" checked><span class="custom-cb"></span><span class="tool-label">IPv6 address check</span></label>
+    </div>
+
+    <div class="cat-block" id="cat-cms">
+      <div class="cat-header">
+        <span class="cat-icon">🧩</span>
+        <span class="cat-title">CMS / Framework</span>
+        <span class="cat-badge badge-py">Python</span>
+      </div>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="wordpress" checked><span class="custom-cb"></span><span class="tool-label">WordPress</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="drupal" checked><span class="custom-cb"></span><span class="tool-label">Drupal</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="joomla" checked><span class="custom-cb"></span><span class="tool-label">Joomla</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="aspnet" checked><span class="custom-cb"></span><span class="tool-label">ASP.NET misconfiguration</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool python" value="elmah" checked><span class="custom-cb"></span><span class="tool-label">Elmah logger exposure</span></label>
+    </div>
+
+    <div class="cat-block locked" id="cat-basic-recon">
+      <div class="cat-lock-overlay" onclick="openPricingModal()">🔒 Medium Plan · ₹99</div>
+      <div class="cat-header"><span class="cat-icon">📡</span><span class="cat-title">Basic Recon</span><span class="cat-badge badge-nmap">Nmap</span></div>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="ping"><span class="custom-cb"></span><span class="tool-label">Ping reachability</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="whois"><span class="custom-cb"></span><span class="tool-label">WHOIS lookup</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_basic"><span class="custom-cb"></span><span class="tool-label">Nmap top-100 ports</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_top1000"><span class="custom-cb"></span><span class="tool-label">Nmap top-1000 ports</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_version"><span class="custom-cb"></span><span class="tool-label">Service version detection</span></label>
+    </div>
+
+    <div class="cat-block locked" id="cat-ssl">
+      <div class="cat-lock-overlay" onclick="openPricingModal()">🔒 Medium Plan · ₹99</div>
+      <div class="cat-header"><span class="cat-icon">🔒</span><span class="cat-title">SSL / TLS</span><span class="cat-badge badge-nmap">Nmap</span></div>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_ssl_cert"><span class="custom-cb"></span><span class="tool-label">SSL certificate & expiry</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_heartbleed"><span class="custom-cb"></span><span class="tool-label">Heartbleed CVE-2014-0160</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_poodle"><span class="custom-cb"></span><span class="tool-label">POODLE SSL downgrade</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_ccs"><span class="custom-cb"></span><span class="tool-label">CCS injection CVE-2014-0224</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_freak"><span class="custom-cb"></span><span class="tool-label">FREAK cipher enum</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_logjam"><span class="custom-cb"></span><span class="tool-label">LOGJAM weak DH params</span></label>
+    </div>
+
+    <div class="cat-block locked" id="cat-http">
+      <div class="cat-lock-overlay" onclick="openPricingModal()">🔒 Medium Plan · ₹99</div>
+      <div class="cat-header"><span class="cat-icon">🕷️</span><span class="cat-title">HTTP Attacks</span><span class="cat-badge badge-nmap">Nmap</span></div>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_headers"><span class="custom-cb"></span><span class="tool-label">HTTP security headers (nmap)</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_http_methods"><span class="custom-cb"></span><span class="tool-label">Allowed methods (PUT/DELETE)</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_http_auth"><span class="custom-cb"></span><span class="tool-label">HTTP auth mechanisms</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_http_enum"><span class="custom-cb"></span><span class="tool-label">Web directory enumeration</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_http_shellshock"><span class="custom-cb"></span><span class="tool-label">Shellshock CVE-2014-6271</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_slowloris"><span class="custom-cb"></span><span class="tool-label">Slowloris DoS check</span><span class="tool-slow">DoS</span></label>
+    </div>
+
+    <div class="cat-block locked" id="cat-netservices">
+      <div class="cat-lock-overlay" onclick="openPricingModal()">🔒 Pro Plan · ₹199</div>
+      <div class="cat-header"><span class="cat-icon">🔌</span><span class="cat-title">Network Services</span><span class="cat-badge badge-pro">Pro</span></div>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_ssh"><span class="custom-cb"></span><span class="tool-label">SSH algorithm enum</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_ftp"><span class="custom-cb"></span><span class="tool-label">FTP anon login + bounce</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_telnet"><span class="custom-cb"></span><span class="tool-label">Telnet detection</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_smtp"><span class="custom-cb"></span><span class="tool-label">SMTP open relay</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_dns"><span class="custom-cb"></span><span class="tool-label">DNS zone transfer</span></label>
+    </div>
+
+    <div class="cat-block locked" id="cat-db">
+      <div class="cat-lock-overlay" onclick="openPricingModal()">🔒 Pro Plan · ₹199</div>
+      <div class="cat-header"><span class="cat-icon">🗄️</span><span class="cat-title">Databases</span><span class="cat-badge badge-pro">Pro</span></div>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_mysql"><span class="custom-cb"></span><span class="tool-label">MySQL detection</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_mssql"><span class="custom-cb"></span><span class="tool-label">MS-SQL detection</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_mongodb"><span class="custom-cb"></span><span class="tool-label">MongoDB detection</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_redis"><span class="custom-cb"></span><span class="tool-label">Redis detection</span></label>
+    </div>
+
+    <div class="cat-block locked" id="cat-smb">
+      <div class="cat-lock-overlay" onclick="openPricingModal()">🔒 Pro Plan · ₹199</div>
+      <div class="cat-header"><span class="cat-icon">🪟</span><span class="cat-title">SMB / Windows</span><span class="cat-badge badge-pro">Pro</span></div>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_smb_tcp"><span class="custom-cb"></span><span class="tool-label">SMB security mode</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_smb_vuln"><span class="custom-cb"></span><span class="tool-label">EternalBlue MS17-010</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_smb_enum"><span class="custom-cb"></span><span class="tool-label">SMB shares & users</span></label>
+    </div>
+
+    <div class="cat-block locked" id="cat-firewall">
+      <div class="cat-lock-overlay" onclick="openPricingModal()">🔒 Pro Plan · ₹199</div>
+      <div class="cat-header"><span class="cat-icon">🛡️</span><span class="cat-title">Firewall / IDS</span><span class="cat-badge badge-pro">Pro</span></div>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_firewall_acl"><span class="custom-cb"></span><span class="tool-label">ACK scan – firewall map</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_firewall_detect"><span class="custom-cb"></span><span class="tool-label">FIN scan – IDS evasion</span></label>
+      <label class="tool-item"><input type="checkbox" class="tool nmap" value="nmap_null_scan"><span class="custom-cb"></span><span class="tool-label">NULL scan</span></label>
+    </div>
+
+  </div><!-- /categories -->
+
+  <!-- Scan launch row -->
+  <div class="scan-row">
+    <button class="btn btn-primary" id="scanBtn2" onclick="startScan()">Run Scan</button>
+    <span class="sel-count" id="selCount">0 tools selected</span>
+  </div>
+
+  <!-- Threat meter -->
+  <div class="threat-meter" id="threatMeter">
+    <div class="tm-label">Overall risk level</div>
+    <div class="tm-bar-bg"><div class="tm-bar" id="tmBar"></div></div>
+    <div class="tm-text" id="tmText">—</div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="scan-summary" id="scanSummary">
+    <div class="sum-card crit"><div class="sum-num" id="sumCrit">0</div><div class="sum-label">Critical / High</div></div>
+    <div class="sum-card warn"><div class="sum-num" id="sumWarn">0</div><div class="sum-label">Medium / Warning</div></div>
+    <div class="sum-card ok">  <div class="sum-num" id="sumOk">0</div>  <div class="sum-label">Passed Checks</div></div>
+    <div class="sum-card info"><div class="sum-num" id="sumInfo">0</div><div class="sum-label">Info / Other</div></div>
+  </div>
+
+  <!-- Progress -->
+  <div id="progress-wrap">
+    <div id="progress-label">Scanning… 0 / 0</div>
+    <div class="progress-track"><div id="progress-bar"></div></div>
+  </div>
+
+  <!-- Export bar -->
+  <div id="export-bar">
+    <span class="export-label">✓ Scan complete</span>
+    <button class="btn btn-outline btn-sm" onclick="exportReport()">📄 Download PDF <span class="free-tag">FREE</span></button>
+    <button class="btn btn-outline btn-sm" onclick="openChatWithContext()">🤖 Analyze with AI <span class="free-tag">FREE</span></button>
+  </div>
+
+  <!-- Results -->
+  <div id="output"></div>
+</div>
+<!-- /scanner-panel -->
+
+<!-- ══════════════ HISTORY TAB ══════════════ -->
+<div id="history-panel">
+  <div class="history-header">
+    <span class="history-title">Scan History</span>
+    <button class="btn btn-outline btn-sm" onclick="loadHistory()">↻ Refresh</button>
+    <button class="btn btn-danger btn-sm" onclick="clearAllHistory()">Delete All</button>
+    <span style="font-size:11px;color:var(--ink-3);margin-left:auto">Stored in local SQLite database</span>
+  </div>
+  <table class="history-table" id="historyTable">
+    <thead>
+      <tr>
+        <th>#</th><th>Target</th><th>Date / Time</th><th>Plan</th>
+        <th>Checks</th><th>Critical</th><th>Warnings</th><th>Passed</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="historyBody">
+      <tr><td colspan="9" class="h-empty">No scans yet. Run your first scan!</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════ PRICING MODAL ══════════════ -->
+<div class="modal-overlay" id="pricingModal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closePricingModal()">✕</button>
+    <div class="modal-title">Choose a Plan</div>
+    <div class="modal-sub">PDF download and AI Chatbot are free on every plan · Upgrade for Nmap power</div>
+    <div class="plans-grid">
+
+      <div class="plan-card basic-card selected" id="plan-card-basic" onclick="selectPlan('basic')">
+        <div class="free-badge">FREE</div>
+        <div class="plan-card-name">Basic</div>
+        <div class="plan-price">₹0 <span>/ scan</span></div>
+        <div class="plan-desc">Full Python scans, PDF + AI. No card needed.</div>
+        <ul class="plan-features">
+          <li>11 Python scan tools</li>
+          <li>HTTP headers, CORS, CMS</li>
+          <li>PDF report download</li>
+          <li>AI Chatbot with threat intel</li>
+          <li>Scan history</li>
+          <li class="no">No Nmap scans</li>
+        </ul>
+      </div>
+
+      <div class="plan-card medium-card" id="plan-card-medium" onclick="selectPlan('medium')">
+        <div class="plan-card-name">Medium</div>
+        <div class="plan-price">₹99 <span>/ scan</span></div>
+        <div class="plan-desc">Nmap scans, SSL/TLS checks, port scanning.</div>
+        <ul class="plan-features">
+          <li>Everything in Basic</li>
+          <li>Nmap top-1000 port scan</li>
+          <li>SSL/TLS vuln checks</li>
+          <li>HTTP attack surface map</li>
+          <li>Heartbleed, POODLE, FREAK</li>
+          <li>SSH & FTP checks</li>
+        </ul>
+      </div>
+
+      <div class="plan-card pro-card" id="plan-card-pro" onclick="selectPlan('pro')">
+        <div class="plan-card-name">Pro</div>
+        <div class="plan-price">₹199 <span>/ scan</span></div>
+        <div class="plan-desc">All tools — full ports, databases, SMB, firewall.</div>
+        <ul class="plan-features">
+          <li>Everything in Medium</li>
+          <li>Full TCP/UDP (65535 ports)</li>
+          <li>Database detection</li>
+          <li>SMB / EternalBlue checks</li>
+          <li>Firewall / IDS evasion</li>
+          <li>OS fingerprinting</li>
+        </ul>
+      </div>
+
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="payBtn" onclick="handlePayment()">Continue with Free Plan</button>
+      <span class="pay-note" id="payNote">Selected: Basic (Free)</span>
+      <span class="pay-note" style="margin-left:auto">🔒 Payments via Razorpay</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ HISTORY DETAIL MODAL ══════════════ -->
+<div class="modal-overlay" id="histDetailModal">
+  <div class="modal-box wide">
+    <button class="modal-close" onclick="closeHistDetail()">✕</button>
+    <div class="modal-title" id="histDetailTitle">Scan Details</div>
+    <div class="modal-sub" id="histDetailSub"></div>
+    <div id="histDetailContent"></div>
+  </div>
+</div>
+
+<!-- ══════════════ CHAT PANEL ══════════════ -->
+<div id="chat-overlay" onclick="toggleChat()"></div>
+<div id="chat-panel">
+  <div class="chat-header">
+    <div>
+      <div class="chat-title">🤖 MTVS AI Assistant</div>
+      <div class="chat-sub">Groq LLaMA-3.3 · Full threat intelligence</div>
+    </div>
+    <span class="chat-free">FREE</span>
+    <button class="btn btn-ghost btn-sm" onclick="toggleChat()">✕</button>
+  </div>
+
+  <div id="chat-messages">
+    <div class="msg msg-ai">
+      <div class="msg-sender">MTVS AI</div>
+      Hello! I'm your security assistant. I know every scan tool and vulnerability in detail.<br><br>
+      I can explain findings in plain English, give step-by-step fixes, and prioritize what to patch first.<br><br>
+      Run a scan then click "Analyze with AI" — or just ask me anything!
+    </div>
+  </div>
+
+  <div class="quick-prompts">
+    <button class="qp-btn" onclick="sendQuick('Analyze my scan results and list all critical findings')">🔴 Analyze results</button>
+    <button class="qp-btn" onclick="sendQuick('What should I fix first? Prioritize by severity')">🔧 Prioritize fixes</button>
+    <button class="qp-btn" onclick="sendQuick('Explain Heartbleed and how to fix it')">💡 Heartbleed</button>
+    <button class="qp-btn" onclick="sendQuick('What does an exposed .git or .env file mean?')">📁 .git/.env risk</button>
+    <button class="qp-btn" onclick="sendQuick('Give me a full security hardening checklist')">📋 Checklist</button>
+  </div>
+
+  <div class="context-toggle">
+    <input type="checkbox" id="useContext" checked>
+    <label for="useContext" style="cursor:pointer">Include current scan results in context</label>
+  </div>
+
+  <div class="chat-input-row">
+    <textarea id="chat-input" placeholder="Ask about vulnerabilities, CVEs, fixes…" rows="1"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+    <button id="chat-send" onclick="sendChat()">Send</button>
+  </div>
+</div>
+
+<!-- ══════════════ RAZORPAY ══════════════ -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────
+let currentPlan = 'basic';
+let verifiedPaymentId = '';
+let selectedPlanKey = 'basic';
+let lastScanResults = null, lastScanTarget = '', lastScanTime = '';
+let chatHistory = [], chatOpen = false;
+
+const PLAN_TOOL_ACCESS = {
+  basic: new Set(['http_headers','https_redirect','cors','robots','open_dirs','ipv6','aspnet','elmah','wordpress','drupal','joomla']),
+  medium: new Set(['http_headers','https_redirect','cors','robots','open_dirs','ipv6','aspnet','elmah','wordpress','drupal','joomla',
+    'ping','whois','nmap_basic','nmap_top1000','nmap_version','nmap_ssl_cert','nmap_headers',
+    'nmap_http_methods','nmap_http_auth','nmap_http_enum','nmap_heartbleed','nmap_poodle','nmap_ccs','nmap_freak','nmap_logjam','nmap_ssh','nmap_ftp']),
+  pro: null,
+};
+
+// ── TABS ──────────────────────────────────────────────────────────
+function showTab(tab) {
+  document.getElementById('scanner-panel').style.display = tab==='scanner'?'block':'none';
+  document.getElementById('history-panel').style.display = tab==='history'?'block':'none';
+  document.getElementById('tab-scanner').classList.toggle('active', tab==='scanner');
+  document.getElementById('tab-history').classList.toggle('active', tab==='history');
+}
+
+// ── PLAN ──────────────────────────────────────────────────────────
+function applyPlan(planKey) {
+  currentPlan = planKey;
+  const badge = document.getElementById('planBadge');
+  const labels = {basic:'Free Plan', medium:'Medium Plan', pro:'Pro Plan'};
+  badge.textContent = labels[planKey] || 'Free Plan';
+  badge.className = `plan-chip${planKey!=='basic'?' '+planKey:''}`;
+
+  const lockMap = {
+    basic:  ['cat-basic-recon','cat-ssl','cat-http','cat-netservices','cat-db','cat-smb','cat-firewall'],
+    medium: ['cat-netservices','cat-db','cat-smb','cat-firewall'],
+    pro:    [],
+  };
+  const all = ['cat-basic-recon','cat-ssl','cat-http','cat-netservices','cat-db','cat-smb','cat-firewall'];
+  all.forEach(id => {
+    const el = document.getElementById(id); if(!el) return;
+    el.classList.remove('locked');
+    const ov = el.querySelector('.cat-lock-overlay'); if(ov) ov.style.display='none';
+  });
+  (lockMap[planKey]||lockMap.basic).forEach(id => {
+    const el = document.getElementById(id); if(!el) return;
+    el.classList.add('locked');
+    const ov = el.querySelector('.cat-lock-overlay'); if(ov) ov.style.display='flex';
+  });
+  updateCount();
+}
+
+// ── PRICING MODAL ─────────────────────────────────────────────────
+function openPricingModal()  { document.getElementById('pricingModal').classList.add('open'); }
+function closePricingModal() { document.getElementById('pricingModal').classList.remove('open'); }
+document.getElementById('pricingModal').addEventListener('click', e => {
+  if(e.target===document.getElementById('pricingModal')) closePricingModal();
+});
+
+function selectPlan(key) {
+  selectedPlanKey = key;
+  document.querySelectorAll('.plan-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById(`plan-card-${key}`).classList.add('selected');
+  const prices = {basic:0, medium:99, pro:199};
+  const btn = document.getElementById('payBtn');
+  const note = document.getElementById('payNote');
+  if(key==='basic') { btn.textContent='Continue with Free Plan'; note.textContent='No payment needed'; }
+  else { btn.textContent=`Pay ₹${prices[key]} & Activate`; note.textContent=`${key.charAt(0).toUpperCase()+key.slice(1)} Plan — ₹${prices[key]}`; }
+}
+
+async function handlePayment() {
+  if(selectedPlanKey==='basic') { applyPlan('basic'); closePricingModal(); return; }
+  const btn = document.getElementById('payBtn');
+  btn.disabled=true; btn.textContent='Creating order…';
+  try {
+    const r = await fetch('/create_order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan:selectedPlanKey})});
+    const order = await r.json();
+    if(order.error){alert('Order error: '+order.error);btn.disabled=false;return;}
+    const opts = {
+      key:order.key_id, amount:order.amount, currency:order.currency,
+      name:'MTVS Security Scanner', description:`${order.plan_name} Plan`, order_id:order.order_id,
+      handler:async function(resp){
+        const vr = await fetch('/verify_payment',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({razorpay_order_id:resp.razorpay_order_id,razorpay_payment_id:resp.razorpay_payment_id,
+            razorpay_signature:resp.razorpay_signature,plan:selectedPlanKey})});
+        const vd = await vr.json();
+        if(vd.verified){verifiedPaymentId=resp.razorpay_payment_id;applyPlan(selectedPlanKey);closePricingModal();alert('Plan activated!');}
+        else alert('Payment verification failed.');
+      },
+      theme:{color:'#1a6b3a'},
+    };
+    new Razorpay(opts).open();
+  } catch(e){alert('Payment error: '+e);}
+  finally{btn.disabled=false;selectPlan(selectedPlanKey);}
+}
+
+// ── TOOL COUNT ────────────────────────────────────────────────────
+function updateCount() {
+  const n = document.querySelectorAll('.tool:checked').length;
+  document.getElementById('selCount').textContent = `${n} tool${n===1?'':'s'} selected`;
+}
+document.querySelectorAll('.tool').forEach(cb=>cb.addEventListener('change',updateCount));
+updateCount();
+
+function selectAll()    {document.querySelectorAll('.tool').forEach(c=>c.checked=true); updateCount();}
+function clearAll()     {document.querySelectorAll('.tool').forEach(c=>c.checked=false); updateCount();}
+function selectPython() {document.querySelectorAll('.tool').forEach(c=>c.checked=false); document.querySelectorAll('.tool.python').forEach(c=>c.checked=true); updateCount();}
+function selectNmap()   {document.querySelectorAll('.tool').forEach(c=>c.checked=false); document.querySelectorAll('.tool.nmap').forEach(c=>c.checked=true); updateCount();}
+function selectSafe() {
+  document.querySelectorAll('.tool').forEach(c=>c.checked=true);
+  ['nmap_full_tcp','nmap_full_udp','nmap_slowloris'].forEach(v=>{const el=document.querySelector(`.tool[value="${v}"]`);if(el)el.checked=false;});
+  updateCount();
+}
+
+// ── HIGHLIGHT ─────────────────────────────────────────────────────
+function highlight(text) {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/(\[VULNERABLE\]|\[MISSING\])/g,'<span class="hl-vuln">$1</span>')
+    .replace(/(\[OK\]\s*)/g,'<span class="hl-ok">$1</span>')
+    .replace(/(\[WARN\]\s*)/g,'<span class="hl-warn">$1</span>')
+    .replace(/(\[INFO\]\s*)/g,'<span class="hl-info">$1</span>')
+    .replace(/(\[FOUND\])/g,'<span class="hl-found">$1</span>');
+}
+
+function escHtml(t){ return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── BUILD RESULT CARD ─────────────────────────────────────────────
+function buildResultCard(r, animate=true) {
+  const tl = r.threat_level || {level:'INFO',color:'#1a4a8a',icon:'ℹ️'};
+  const ti = r.threat_intel || {};
+  const sc = r.status==='completed'?'status-completed':r.status==='timeout'?'status-timeout':'status-error';
+  const cardId = `card-${r.tool}`;
+  return `
+  <div class="result-block" id="${cardId}">
+    <div class="result-header" onclick="toggleCard('${cardId}')">
+      <span class="result-tool">${r.tool.replace(/_/g,' ')}</span>
+      <span class="result-desc">${r.description||''}</span>
+      <div class="result-meta">
+        <span class="threat-badge threat-${tl.level}">${tl.icon} ${tl.level}</span>
+        <span class="status-badge ${sc}">${r.status.toUpperCase()}</span>
+        <span class="caret" id="caret-${cardId}">▾</span>
+      </div>
+    </div>
+    <div class="result-content" id="content-${cardId}">
+      <div class="threat-intel-panel">
+        <div class="ti-section ti-what">
+          <div class="ti-label">🔍 What is this?</div>
+          <div class="ti-text">${escHtml(ti.what||'Security reconnaissance check.')}</div>
+          <div class="ti-cve">${escHtml(ti.cve||'')}</div>
+        </div>
+        <div class="ti-section ti-why">
+          <div class="ti-label">⚠️ Why it matters</div>
+          <div class="ti-text">${escHtml(ti.why||'Security issues found may be exploitable.')}</div>
+        </div>
+        <div class="ti-section ti-fix">
+          <div class="ti-label">🔧 How to fix</div>
+          <div class="ti-text" style="white-space:pre-line">${escHtml(ti.fix||'Review findings and apply patches.')}</div>
+        </div>
+      </div>
+      <div class="result-body">${highlight(r.output||'(no output)')}</div>
+    </div>
+  </div>`;
+}
+
+function toggleCard(cardId) {
+  const content = document.getElementById(`content-${cardId}`);
+  const caret   = document.getElementById(`caret-${cardId}`);
+  if(content){ const c = content.classList.toggle('collapsed'); if(caret) caret.textContent = c?'▸':'▾'; }
+}
+
+// ── SCAN ──────────────────────────────────────────────────────────
+async function startScan() {
+  const target = document.getElementById('target').value.trim();
+  if(!target){alert('Please enter a target.');return;}
+  const tools = [...document.querySelectorAll('.tool:checked')].map(c=>c.value);
+  if(!tools.length){alert('Select at least one tool.');return;}
+
+  const out=document.getElementById('output');
+  const prog=document.getElementById('progress-wrap');
+  const pLabel=document.getElementById('progress-label');
+  const pBar=document.getElementById('progress-bar');
+  const expBar=document.getElementById('export-bar');
+  const summary=document.getElementById('scanSummary');
+  const meter=document.getElementById('threatMeter');
+
+  out.innerHTML=''; expBar.style.display='none';
+  summary.classList.remove('visible'); meter.classList.remove('visible');
+  lastScanResults=null;
+  [document.getElementById('scanBtn'),document.getElementById('scanBtn2')].forEach(b=>b.disabled=true);
+  prog.style.display='block'; pBar.style.width='0%';
+  pLabel.textContent=`Scanning ${target} — 0 / ${tools.length}`;
+
+  tools.forEach(key => {
+    out.insertAdjacentHTML('beforeend',`
+      <div class="result-block" id="card-${key}">
+        <div class="result-header">
+          <span class="result-tool">${key.replace(/_/g,' ')}</span>
+          <span class="result-desc">Queued…</span>
+          <div class="result-meta"><span class="status-badge status-running">QUEUED</span></div>
+        </div>
+      </div>`);
+  });
+
+  try {
+    const resp = await fetch('/scan',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({target,tools,plan:currentPlan})});
+    const data = await resp.json();
+    if(data.error){out.innerHTML=`<div class="result-body">[ERROR] ${data.error}</div>`;return;}
+
+    if(data.blocked&&data.blocked.length){
+      out.insertAdjacentHTML('afterbegin',`
+        <div class="result-block" style="border-color:var(--warn)">
+          <div class="result-header" style="background:var(--warn-lt)">
+            <span class="result-tool" style="color:var(--warn)">Plan restriction</span>
+            <span class="result-desc">${data.blocked.length} tool(s) skipped — upgrade to unlock</span>
+          </div>
+          <div class="result-body" style="color:var(--warn-lt)">${data.blocked.join(', ')}</div>
+        </div>`);
+    }
+
+    let critCount=0, warnCount=0, okCount=0, infoCount=0;
+    data.results.forEach((r,i)=>{
+      const tl=r.threat_level||{level:'INFO'};
+      if(tl.level==='CRITICAL'||tl.level==='HIGH') critCount++;
+      else if(tl.level==='MEDIUM') warnCount++;
+      else if(tl.level==='LOW') okCount++;
+      else infoCount++;
+
+      const cardEl=document.getElementById(`card-${r.tool}`);
+      if(cardEl) cardEl.outerHTML=buildResultCard(r,false);
+
+      const done=i+1;
+      pBar.style.width=`${Math.round(done/data.results.length*100)}%`;
+      pLabel.textContent=`Scanning ${data.target} — ${done} / ${data.results.length} complete`;
+    });
+
+    lastScanResults=data.results; lastScanTarget=data.target;
+    lastScanTime=data.scan_time||new Date().toLocaleString();
+    pLabel.textContent=`✓ Complete — ${data.results.length} checks on ${data.target}`;
+    expBar.style.display='flex';
+
+    document.getElementById('sumCrit').textContent=critCount;
+    document.getElementById('sumWarn').textContent=warnCount;
+    document.getElementById('sumOk').textContent=okCount;
+    document.getElementById('sumInfo').textContent=infoCount;
+    summary.classList.add('visible');
+
+    const total=data.results.length||1;
+    const riskPct=Math.min(100,Math.round((critCount*3+warnCount*1.5)/total*33));
+    const bar=document.getElementById('tmBar');
+    const tmText=document.getElementById('tmText');
+    const riskColor=riskPct>60?'var(--danger)':riskPct>30?'var(--warn)':'var(--ok)';
+    const riskLabel=riskPct>60?'High Risk':riskPct>30?'Moderate Risk':'Low Risk';
+    bar.style.width=`${riskPct}%`; bar.style.background=riskColor;
+    tmText.textContent=riskLabel; tmText.style.color=riskColor;
+    meter.classList.add('visible');
+
+  } catch(e){out.innerHTML=`<div class="result-body">[Error] ${e}</div>`;}
+  finally{[document.getElementById('scanBtn'),document.getElementById('scanBtn2')].forEach(b=>b.disabled=false);}
+}
+
+// ── PDF EXPORT ────────────────────────────────────────────────────
+async function exportReport(){
+  if(!lastScanResults){alert('Run a scan first.');return;}
+  try {
+    const resp=await fetch('/export_pdf',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({target:lastScanTarget,results:lastScanResults,scan_time:lastScanTime,plan:currentPlan})});
+    if(!resp.ok){const e=await resp.json();alert('Export failed: '+(e.error||resp.statusText));return;}
+    const blob=await resp.blob();
+    const cd=resp.headers.get('Content-Disposition')||'';
+    const fn=(cd.match(/filename="?([^"]+)"?/)||[])[1]||'MTVS_report.pdf';
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=fn;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  } catch(e){alert('Export error: '+e);}
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────
+async function loadHistory(){
+  const body=document.getElementById('historyBody');
+  body.innerHTML='<tr><td colspan="9" class="h-empty">Loading…</td></tr>';
+  try {
+    const resp=await fetch('/history?limit=100');
+    const data=await resp.json();
+    if(!data.length){body.innerHTML='<tr><td colspan="9" class="h-empty">No scans yet.</td></tr>';return;}
+    body.innerHTML=data.map(s=>`
+      <tr>
+        <td style="color:var(--ink-3)">#${s.id}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px">${escHtml(s.target)}</td>
+        <td style="color:var(--ink-3);font-size:11px">${escHtml(s.scan_time)}</td>
+        <td><span style="font-size:11px;font-weight:600;color:${s.plan==='pro'?'var(--accent)':s.plan==='medium'?'var(--warn)':'var(--ink-3)'}">${(s.plan||'basic').toUpperCase()}</span></td>
+        <td>${s.total_checks}</td>
+        <td class="h-vuln-ct">${s.vuln_count>0?'⚠ '+s.vuln_count:s.vuln_count}</td>
+        <td class="h-warn-ct">${s.warn_count>0?s.warn_count:s.warn_count}</td>
+        <td class="h-ok-ct">${s.ok_count}</td>
+        <td><div class="h-btn-row">
+          <button class="btn btn-outline btn-sm" onclick="viewHistDetail(${s.id})">View</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteScan(${s.id})">Del</button>
+        </div></td>
+      </tr>`).join('');
+  } catch(e){body.innerHTML=`<tr><td colspan="9" class="h-empty">Error: ${e}</td></tr>`;}
+}
+
+async function viewHistDetail(id){
+  try {
+    const resp=await fetch(`/history/${id}`);
+    const data=await resp.json();
+    if(data.error){alert('Not found');return;}
+    const s=data.scan;
+    document.getElementById('histDetailTitle').textContent=`Scan #${s.id} — ${s.target}`;
+    document.getElementById('histDetailSub').textContent=`${s.scan_time} · ${s.total_checks} checks · Plan: ${s.plan}`;
+    const fakeResults=data.results.map(r=>({
+      tool:r.tool,description:r.description,category:r.category,status:r.status,output:r.output,
+      threat_level:{level:r.threat_level||'INFO',icon:'ℹ️'},
+      threat_intel:{what:'',why:'',fix:'',cve:''}
+    }));
+    document.getElementById('histDetailContent').innerHTML=fakeResults.map(r=>buildResultCard(r,false)).join('');
+    document.getElementById('histDetailModal').classList.add('open');
+  } catch(e){alert('Error: '+e);}
+}
+function closeHistDetail(){document.getElementById('histDetailModal').classList.remove('open');}
+document.getElementById('histDetailModal').addEventListener('click',e=>{if(e.target===document.getElementById('histDetailModal'))closeHistDetail();});
+
+async function deleteScan(id){
+  if(!confirm(`Delete scan #${id}?`))return;
+  await fetch(`/history/${id}`,{method:'DELETE'});
+  loadHistory();
+}
+async function clearAllHistory(){
+  if(!confirm('Delete ALL scan history?'))return;
+  const resp=await fetch('/history?limit=1000');
+  const data=await resp.json();
+  for(const s of data) await fetch(`/history/${s.id}`,{method:'DELETE'});
+  loadHistory();
+}
+
+// ── CHATBOT ───────────────────────────────────────────────────────
+function toggleChat(){
+  chatOpen=!chatOpen;
+  const panel=document.getElementById('chat-panel');
+  const overlay=document.getElementById('chat-overlay');
+  if(chatOpen){panel.classList.add('open');overlay.style.display='block';document.getElementById('chat-input').focus();}
+  else{panel.classList.remove('open');overlay.style.display='none';}
+}
+function openChatWithContext(){
+  if(!chatOpen) toggleChat();
+  document.getElementById('useContext').checked=true;
+  setTimeout(()=>{
+    const inp=document.getElementById('chat-input');
+    inp.value='Analyze my scan results. List all critical vulnerabilities with explanations and fix steps.';
+    inp.focus();
+  },350);
+}
+function appendMsg(role,text){
+  const box=document.getElementById('chat-messages');
+  const div=document.createElement('div');
+  div.className=`msg msg-${role}`;
+  const sender=role==='user'?'You':'MTVS AI';
+  div.innerHTML=`<div class="msg-sender">${sender}</div>${escHtml(text).replace(/\n/g,'<br>')}`;
+  box.appendChild(div); box.scrollTop=box.scrollHeight;
+}
+function appendTyping(){
+  const box=document.getElementById('chat-messages');
+  const div=document.createElement('div');
+  div.className='msg-typing'; div.id='typing-indicator';
+  div.textContent='AI is analyzing…';
+  box.appendChild(div); box.scrollTop=box.scrollHeight;
+  return div;
+}
+function buildScanContext(){
+  if(!lastScanResults) return '';
+  let ctx=`Target: ${lastScanTarget}\nScan time: ${lastScanTime}\n\n`;
+  lastScanResults.forEach(r=>{
+    const tl=r.threat_level||{};
+    ctx+=`=== ${r.tool.toUpperCase()} [${r.status}] [${tl.level||'INFO'}] ===\n${r.output}\n\n`;
+  });
+  return ctx.slice(0,5000);
+}
+async function sendChat(){
+  const input=document.getElementById('chat-input');
+  const text=input.value.trim();
+  if(!text) return;
+  input.value='';
+  appendMsg('user',text);
+  chatHistory.push({role:'user',content:text});
+  const btn=document.getElementById('chat-send'); btn.disabled=true;
+  const typing=appendTyping();
+  const useCtx=document.getElementById('useContext').checked;
+  try {
+    const resp=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages:chatHistory,scan_context:useCtx?buildScanContext():'',plan:currentPlan})});
+    const data=await resp.json();
+    typing.remove();
+    if(data.error) appendMsg('ai',`[Error] ${data.error}`);
+    else { appendMsg('ai',data.reply); chatHistory.push({role:'assistant',content:data.reply}); }
+  } catch(e){typing.remove();appendMsg('ai',`[Error] ${e}`);}
+  finally{btn.disabled=false;input.focus();}
+}
+function sendQuick(text){document.getElementById('chat-input').value=text;sendChat();}
+
+// ── KEYBOARD ──────────────────────────────────────────────────────
+document.getElementById('target').addEventListener('keydown',e=>{if(e.key==='Enter')startScan();});
+document.getElementById('chat-input').addEventListener('input',function(){
+  this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px';
+});
+
+// ── INIT ──────────────────────────────────────────────────────────
+applyPlan('basic');
+selectPlan('basic');
+</script>
+</body>
+</html>
