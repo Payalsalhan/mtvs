@@ -19,7 +19,7 @@ from cryptography.fernet import Fernet
 auth = Blueprint('auth', __name__)
 
 # ── DB path ───────────────────────────────────────────────────────────────
-DB_PATH  = "mtvs_scans.db"
+DB_PATH = os.environ.get('DB_PATH', 'mtvs_scans.db')
 KEY_FILE = "db.key"
 
 

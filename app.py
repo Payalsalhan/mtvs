@@ -47,7 +47,7 @@ def load_user(user_id):
 GROQ_API_KEY        = os.getenv('GROQ_API_KEY')
 RAZORPAY_KEY_ID     = "rzp_test_XXXXXXXXXXXXXXXX"
 RAZORPAY_KEY_SECRET = "YOUR_SECRET_HERE"
-DB_PATH             = "mtvs_scans.db"
+DB_PATH = os.environ.get('DB_PATH', 'mtvs_scans.db')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DATABASE SETUP
