@@ -45,8 +45,8 @@ def load_user(user_id):
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 GROQ_API_KEY        = os.getenv('GROQ_API_KEY')
-RAZORPAY_KEY_ID     = "rzp_test_XXXXXXXXXXXXXXXX"
-RAZORPAY_KEY_SECRET = "YOUR_SECRET_HERE"
+RAZORPAY_KEY_ID     = os.environ.get('RAZORPAY_KEY_ID')
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 DB_PATH = os.environ.get('DB_PATH', 'mtvs_scans.db')
 
 # ─────────────────────────────────────────────────────────────────────────────
