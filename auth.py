@@ -20,6 +20,8 @@ auth = Blueprint('auth', __name__)
 
 # ── DB path ───────────────────────────────────────────────────────────────
 DB_PATH = os.environ.get('DB_PATH', 'mtvs_scans.db')
+if os.path.dirname(DB_PATH):
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 KEY_FILE = "db.key"
 
 

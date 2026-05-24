@@ -48,6 +48,8 @@ GROQ_API_KEY        = os.getenv('GROQ_API_KEY')
 RAZORPAY_KEY_ID     = os.environ.get('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 DB_PATH = os.environ.get('DB_PATH', 'mtvs_scans.db')
+if os.path.dirname(DB_PATH):
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DATABASE SETUP
