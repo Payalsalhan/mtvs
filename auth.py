@@ -45,6 +45,7 @@ def get_connection():
 # ENCRYPTION SETUP
 # ─────────────────────────────────────────────────────────────────────────────
 def get_fernet_key():
+    KEY_FILE = 'db.key'
     if os.path.exists(KEY_FILE):
         with open(KEY_FILE, "rb") as f:
             return Fernet(f.read())
