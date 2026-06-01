@@ -77,6 +77,25 @@ def decrypt(token: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # DATABASE
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────
+# DATABASE CONNECTION
+# ─────────────────────────────────────────────────────────────────
+DATABASE_URL = os.environ.get('DATABASE_URL')
+DB_PATH      = os.environ.get('DB_PATH', 'mtvs_scans.db')
+
+def get_connection():
+    if DATABASE_URL:
+        import psycopg2
+        return psycopg2.connect(DATABASE_URL)
+    return sqlite3.connect(DB_PATH)
+
+def ph():
+    return '%s' if DATABASE_URL else '?'
+
+
+# ─────────────────────────────────────────────────────────────────
+# DATABASE INIT
+# ─────────────────────────────────────────────────────────────────
 def init_users_db():
     conn = get_connection()
     c    = conn.cursor()
@@ -112,9 +131,9 @@ def init_users_db():
 init_users_db()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────
 # USER MODEL
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────
 class User(UserMixin):
     def __init__(self, id, google_id, email, name, picture, plan):
         self.id        = id
@@ -133,10 +152,16 @@ class User(UserMixin):
         return (self.name or '').split()[0] if self.name else self.email.split('@')[0]
 
 
+# ─────────────────────────────────────────────────────────────────
+# DATABASE FUNCTIONS
+# ─────────────────────────────────────────────────────────────────
 def get_user_by_id(user_id):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute('SELECT id, google_id, email_enc, name_enc, picture_enc, plan FROM users WHERE id = ?', (user_id,))
+    c    = conn.cursor()
+    c.execute(
+        f'SELECT id, google_id, email_enc, name_enc, picture_enc, plan FROM users WHERE id = {ph()}',
+        (user_id,)
+    )
     row = c.fetchone()
     conn.close()
     if row:
@@ -146,20 +171,41 @@ def get_user_by_id(user_id):
 
 def get_or_create_user(google_id, email, name, picture):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute('SELECT id, google_id, email_enc, name_enc, picture_enc, plan FROM users WHERE google_id = ?', (google_id,))
+    c    = conn.cursor()
+
+    # Check if user exists
+    c.execute(
+        f'SELECT id, google_id, email_enc, name_enc, picture_enc, plan FROM users WHERE google_id = {ph()}',
+        (google_id,)
+    )
     row = c.fetchone()
 
     if row:
-        c.execute('UPDATE users SET last_login=?, name_enc=?, picture_enc=? WHERE google_id=?',
-                  (datetime.now(), encrypt(name), encrypt(picture), google_id))
+        # Update existing user
+        c.execute(
+            f'UPDATE users SET last_login={ph()}, name_enc={ph()}, picture_enc={ph()} WHERE google_id={ph()}',
+            (datetime.now(), encrypt(name), encrypt(picture), google_id)
+        )
         conn.commit()
         user = User(row[0], row[1], decrypt(row[2]), name, picture, row[5])
+
     else:
-        c.execute('INSERT INTO users (google_id, email_enc, name_enc, picture_enc, last_login) VALUES (?,?,?,?,?)',
-                  (google_id, encrypt(email), encrypt(name), encrypt(picture), datetime.now()))
+        # Create new user
+        c.execute(
+            f'''INSERT INTO users 
+                (google_id, email_enc, name_enc, picture_enc, last_login) 
+                VALUES ({ph()},{ph()},{ph()},{ph()},{ph()})''',
+            (google_id, encrypt(email), encrypt(name), encrypt(picture), datetime.now())
+        )
         conn.commit()
-        new_id = c.lastrowid
+
+        # Get new user ID
+        if DATABASE_URL:
+            c.execute("SELECT lastval()")
+            new_id = c.fetchone()[0]
+        else:
+            new_id = c.lastrowid
+
         user = User(new_id, google_id, email, name, picture, 'basic')
 
     conn.close()
