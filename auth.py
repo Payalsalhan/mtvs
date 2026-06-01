@@ -19,10 +19,26 @@ from cryptography.fernet import Fernet
 auth = Blueprint('auth', __name__)
 
 # ── DB path ───────────────────────────────────────────────────────────────
-DB_PATH = os.environ.get('DB_PATH', 'mtvs_scans.db')
-if os.path.dirname(DB_PATH):
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-KEY_FILE = "db.key"
+import os
+DATABASE_URL = os.environ.get('DATABASE_URL')
+DB_PATH      = os.environ.get('DB_PATH', 'mtvs_scans.db')
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+def get_connection():
+    if DATABASE_URL:
+        import psycopg2
+        return psycopg2.connect(DATABASE_URL)
+    return sqlite3.connect(DB_PATH)
+
+def ph():
+    return '%s' if DATABASE_URL else '?'
+
+
+def get_connection():
+    if DATABASE_URL:
+        import psycopg2
+        return psycopg2.connect(DATABASE_URL)
+    return sqlite3.connect(DB_PATH)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -62,20 +78,34 @@ def decrypt(token: str) -> str:
 # DATABASE
 # ─────────────────────────────────────────────────────────────────────────────
 def init_users_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            google_id    TEXT    NOT NULL UNIQUE,
-            email_enc    TEXT    NOT NULL,
-            name_enc     TEXT,
-            picture_enc  TEXT,
-            plan         TEXT    DEFAULT 'basic',
-            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_login   TIMESTAMP
-        )
-    ''')
+    conn = get_connection()
+    c    = conn.cursor()
+    if DATABASE_URL:
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id          SERIAL PRIMARY KEY,
+                google_id   TEXT   NOT NULL UNIQUE,
+                email_enc   TEXT   NOT NULL,
+                name_enc    TEXT,
+                picture_enc TEXT,
+                plan        TEXT   DEFAULT 'basic',
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login  TIMESTAMP
+            )
+        ''')
+    else:
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                google_id   TEXT    NOT NULL UNIQUE,
+                email_enc   TEXT    NOT NULL,
+                name_enc    TEXT,
+                picture_enc TEXT,
+                plan        TEXT    DEFAULT 'basic',
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login  TIMESTAMP
+            )
+        ''')
     conn.commit()
     conn.close()
 
@@ -104,7 +134,7 @@ class User(UserMixin):
 
 
 def get_user_by_id(user_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_connection()
     c = conn.cursor()
     c.execute('SELECT id, google_id, email_enc, name_enc, picture_enc, plan FROM users WHERE id = ?', (user_id,))
     row = c.fetchone()
@@ -115,7 +145,7 @@ def get_user_by_id(user_id):
 
 
 def get_or_create_user(google_id, email, name, picture):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_connection()
     c = conn.cursor()
     c.execute('SELECT id, google_id, email_enc, name_enc, picture_enc, plan FROM users WHERE google_id = ?', (google_id,))
     row = c.fetchone()

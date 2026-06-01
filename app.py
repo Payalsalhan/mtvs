@@ -48,97 +48,188 @@ GROQ_API_KEY        = os.getenv('GROQ_API_KEY')
 RAZORPAY_KEY_ID     = os.environ.get('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 DB_PATH = os.environ.get('DB_PATH', 'mtvs_scans.db')
+
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+def get_connection():
+    if DATABASE_URL:
+        import psycopg2
+        return psycopg2.connect(DATABASE_URL)
+    return sqlite3.connect(DB_PATH)
+
+def ph():
+    return '%s' if DATABASE_URL else '?'
 if os.path.dirname(DB_PATH):
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DATABASE SETUP
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────
+# DATABASE SETUP
+# ─────────────────────────────────────────────────────────────────
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+def get_connection():
+    if DATABASE_URL:
+        import psycopg2
+        return psycopg2.connect(DATABASE_URL)
+    return sqlite3.connect(DB_PATH)
+
+def ph():
+    return '%s' if DATABASE_URL else '?'
+
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS scans (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        target TEXT NOT NULL,
-        scan_time TEXT NOT NULL,
-        plan TEXT DEFAULT 'basic',
-        tools_used TEXT,
-        total_checks INTEGER DEFAULT 0,
-        vuln_count INTEGER DEFAULT 0,
-        warn_count INTEGER DEFAULT 0,
-        ok_count INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS scan_results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        scan_id INTEGER NOT NULL,
-        tool TEXT NOT NULL,
-        description TEXT,
-        category TEXT,
-        status TEXT,
-        output TEXT,
-        severity TEXT,
-        threat_level TEXT,
-        FOREIGN KEY (scan_id) REFERENCES scans(id)
-    )''')
+    conn = get_connection()
+    c    = conn.cursor()
+
+    if DATABASE_URL:
+        # PostgreSQL syntax
+        c.execute('''CREATE TABLE IF NOT EXISTS scans (
+            id           SERIAL PRIMARY KEY,
+            target       TEXT NOT NULL,
+            scan_time    TEXT NOT NULL,
+            plan         TEXT DEFAULT 'basic',
+            tools_used   TEXT,
+            total_checks INTEGER DEFAULT 0,
+            vuln_count   INTEGER DEFAULT 0,
+            warn_count   INTEGER DEFAULT 0,
+            ok_count     INTEGER DEFAULT 0,
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS scan_results (
+            id           SERIAL PRIMARY KEY,
+            scan_id      INTEGER NOT NULL,
+            tool         TEXT NOT NULL,
+            description  TEXT,
+            category     TEXT,
+            status       TEXT,
+            output       TEXT,
+            severity     TEXT,
+            threat_level TEXT,
+            FOREIGN KEY (scan_id) REFERENCES scans(id)
+        )''')
+    else:
+        # SQLite syntax
+        c.execute('''CREATE TABLE IF NOT EXISTS scans (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            target       TEXT NOT NULL,
+            scan_time    TEXT NOT NULL,
+            plan         TEXT DEFAULT 'basic',
+            tools_used   TEXT,
+            total_checks INTEGER DEFAULT 0,
+            vuln_count   INTEGER DEFAULT 0,
+            warn_count   INTEGER DEFAULT 0,
+            ok_count     INTEGER DEFAULT 0,
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS scan_results (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            scan_id      INTEGER NOT NULL,
+            tool         TEXT NOT NULL,
+            description  TEXT,
+            category     TEXT,
+            status       TEXT,
+            output       TEXT,
+            severity     TEXT,
+            threat_level TEXT,
+            FOREIGN KEY (scan_id) REFERENCES scans(id)
+        )''')
+
     conn.commit()
     conn.close()
 
 init_db()
 
+
 def save_scan_to_db(target, results, plan, scan_time):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
+    conn = get_connection()
+    c    = conn.cursor()
+
     vuln_count = sum(1 for r in results if "[VULNERABLE]" in r.get("output","") or "[MISSING]" in r.get("output",""))
     warn_count = sum(1 for r in results if "[WARN]" in r.get("output",""))
     ok_count   = sum(1 for r in results if r.get("status") == "completed")
     tools_used = ",".join([r.get("tool","") for r in results])
 
-    c.execute('''INSERT INTO scans (target, scan_time, plan, tools_used, total_checks, vuln_count, warn_count, ok_count)
-                 VALUES (?,?,?,?,?,?,?,?)''',
+    c.execute(f'''INSERT INTO scans 
+                 (target, scan_time, plan, tools_used, total_checks, vuln_count, warn_count, ok_count)
+                 VALUES ({ph()},{ph()},{ph()},{ph()},{ph()},{ph()},{ph()},{ph()})''',
               (target, scan_time, plan, tools_used, len(results), vuln_count, warn_count, ok_count))
-    scan_id = c.lastrowid
+
+    if DATABASE_URL:
+        c.execute("SELECT lastval()")
+    scan_id = c.fetchone()[0] if DATABASE_URL else c.lastrowid
 
     for r in results:
-        sev, _ = _severity(r)
-        threat = get_threat_level(r)
-        c.execute('''INSERT INTO scan_results (scan_id, tool, description, category, status, output, severity, threat_level)
-                     VALUES (?,?,?,?,?,?,?,?)''',
+        sev, _  = _severity(r)
+        threat  = get_threat_level(r)
+        c.execute(f'''INSERT INTO scan_results 
+                     (scan_id, tool, description, category, status, output, severity, threat_level)
+                     VALUES ({ph()},{ph()},{ph()},{ph()},{ph()},{ph()},{ph()},{ph()})''',
                   (scan_id, r.get("tool",""), r.get("description",""), r.get("category",""),
                    r.get("status",""), r.get("output",""), sev, threat["level"]))
+
     conn.commit()
     conn.close()
     return scan_id
 
+
 def get_scan_history(limit=50):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''SELECT id, target, scan_time, plan, total_checks, vuln_count, warn_count, ok_count, created_at
-                 FROM scans ORDER BY created_at DESC LIMIT ?''', (limit,))
+    conn = get_connection()
+    c    = conn.cursor()
+    c.execute(f'''SELECT id, target, scan_time, plan, total_checks, 
+                         vuln_count, warn_count, ok_count, created_at
+                  FROM scans 
+                  ORDER BY created_at DESC 
+                  LIMIT {ph()}''', (limit,))
     rows = c.fetchall()
     conn.close()
-    return [{"id":r[0],"target":r[1],"scan_time":r[2],"plan":r[3],"total_checks":r[4],
-             "vuln_count":r[5],"warn_count":r[6],"ok_count":r[7],"created_at":r[8]} for r in rows]
+    return [{"id":r[0], "target":r[1], "scan_time":r[2], "plan":r[3],
+             "total_checks":r[4], "vuln_count":r[5], "warn_count":r[6],
+             "ok_count":r[7], "created_at":r[8]} for r in rows]
+
 
 def get_scan_detail(scan_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('SELECT * FROM scans WHERE id=?', (scan_id,))
+    conn = get_connection()
+    c    = conn.cursor()
+
+    c.execute(f'SELECT * FROM scans WHERE id={ph()}', (scan_id,))
     scan = c.fetchone()
-    c.execute('SELECT * FROM scan_results WHERE scan_id=?', (scan_id,))
+
+    c.execute(f'SELECT * FROM scan_results WHERE scan_id={ph()}', (scan_id,))
     results = c.fetchall()
     conn.close()
+
     if not scan:
         return None
-    return {
-        "scan": {"id":scan[0],"target":scan[1],"scan_time":scan[2],"plan":scan[3],
-                 "tools_used":scan[4],"total_checks":scan[5],"vuln_count":scan[6],
-                 "warn_count":scan[7],"ok_count":scan[8]},
-        "results": [{"id":r[0],"scan_id":r[1],"tool":r[2],"description":r[3],
-                     "category":r[4],"status":r[5],"output":r[6],"severity":r[7],"threat_level":r[8]}
-                    for r in results]
-    }
 
+    return {
+        "scan": {
+            "id":           scan[0],
+            "target":       scan[1],
+            "scan_time":    scan[2],
+            "plan":         scan[3],
+            "tools_used":   scan[4],
+            "total_checks": scan[5],
+            "vuln_count":   scan[6],
+            "warn_count":   scan[7],
+            "ok_count":     scan[8]
+        },
+        "results": [
+            {
+                "id":          r[0],
+                "scan_id":     r[1],
+                "tool":        r[2],
+                "description": r[3],
+                "category":    r[4],
+                "status":      r[5],
+                "output":      r[6],
+                "severity":    r[7],
+                "threat_level":r[8]
+            }
+            for r in results
+        ]
+    }
 # ─────────────────────────────────────────────────────────────────────────────
 # THREAT INTELLIGENCE DATABASE
 # ─────────────────────────────────────────────────────────────────────────────
