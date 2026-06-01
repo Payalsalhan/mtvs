@@ -15,6 +15,7 @@
     --border:    #e4e2dc;
     --border-strong: #ccc9bf;
 
+
     --ink:       #1a1916;
     --ink-2:     #4a4840;
     --ink-3:     #8a8680;
@@ -516,13 +517,69 @@
     </div>
   </div>
   <div class="header-actions">
-    <span class="plan-chip" id="planBadge" onclick="openPricingModal()">Free Plan</span>
-    <button class="btn btn-outline" onclick="openPricingModal()">⚡ Upgrade</button>
-    <button class="btn btn-outline" id="chatToggleBtn" onclick="toggleChat()">🤖 AI Assistant <span class="free-tag">FREE</span></button>
-    <button class="btn btn-outline" onclick="showTab('history');loadHistory()">📋 History</button>
-  </div>
-</div>
 
+    <!-- Profile Picture + Name -->
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 12px;
+                background:var(--surface);border:1px solid var(--border);
+                border-radius:var(--radius);cursor:default;">
+        {% if current_user.is_authenticated %}
+            {% if current_user.picture %}
+            <img src="{{ current_user.picture }}"
+                 referrerpolicy="no-referrer"
+                 style="width:26px;height:26px;border-radius:50%;
+                        object-fit:cover;border:1.5px solid var(--border-strong);">
+            {% else %}
+            <div style="width:26px;height:26px;border-radius:50%;
+                        background:var(--accent);color:#fff;
+                        display:flex;align-items:center;justify-content:center;
+                        font-size:12px;font-weight:600;">
+                {{ current_user.first_name[0]|upper }}
+            </div>
+            {% endif %}
+            <span style="font-size:13px;font-weight:500;color:var(--ink-2);">
+                {{ current_user.first_name }}
+            </span>
+            <span style="font-size:10px;padding:2px 7px;border-radius:3px;
+                         font-weight:600;letter-spacing:.03em;
+                         {% if current_user.plan == 'pro' %}
+                             background:var(--accent-lt);color:var(--accent);
+                         {% elif current_user.plan == 'medium' %}
+                             background:var(--warn-lt);color:var(--warn);
+                         {% else %}
+                             background:var(--border);color:var(--ink-3);
+                         {% endif %}">
+                {{ (current_user.plan or 'basic')|upper }}
+            </span>
+        {% endif %}
+    </div>
+
+    <!-- Plan Badge -->
+    <span class="plan-chip" id="planBadge" onclick="openPricingModal()">Free Plan</span>
+
+    <!-- Upgrade Button -->
+    <button class="btn btn-outline" onclick="openPricingModal()">⚡ Upgrade</button>
+
+    <!-- AI Assistant Button -->
+    <button class="btn btn-outline" id="chatToggleBtn" onclick="toggleChat()">
+        🤖 AI Assistant <span class="free-tag">FREE</span>
+    </button>
+
+    <!-- History Button -->
+    <button class="btn btn-outline" onclick="showTab('history');loadHistory()">
+        📋 History
+    </button>
+
+    <!-- Logout Button -->
+    <a href="{{ url_for('auth.logout') }}"
+       class="btn btn-outline"
+       style="color:var(--danger);border-color:var(--danger);
+              text-decoration:none;display:inline-flex;
+              align-items:center;gap:5px;"
+       onclick="return confirm('Are you sure you want to logout?')">
+        🚪 Logout
+    </a>
+
+</div>
 <!-- ══ STATUS BAR ══ -->
 <div class="status-bar">
   <span style="font-size:11px;font-weight:600;color:var(--ink-2)">Current plan:</span>
